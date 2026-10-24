@@ -1,0 +1,279 @@
+---
+title: "uts anmul"
+author: "yetriani rokmaningsih"
+date: "2026-10-23"
+output: html_document
+---
+
+```{r}
+
+data_raw <- read.csv(
+  "C:/Users/HP/OneDrive/berkasku/SEMESTER 5/ANMUL/data set uts anmul.csv",
+  sep = ";",
+  header = TRUE,
+  stringsAsFactors = FALSE
+)
+
+cat("DIMENSI DATA AWAL\n")
+print(dim(data_raw))
+
+cat("\nNAMA VARIABEL\n")
+print(names(data_raw))
+
+cat("\nSTRUKTUR DATA\n")
+str(data_raw)
+
+cat("\nLIMA BARIS PERTAMA\n")
+print(head(data_raw))
+
+cat("\nJUMLAH MISSING VALUE PER VARIABEL\n")
+print(colSums(is.na(data_raw)))
+
+cat("\nJUMLAH BARIS DUPLIKAT PADA DATA AWAL\n")
+print(sum(duplicated(data_raw)))
+
+
+# ============================================================
+# CLEANING DAN PREPROCESSING
+# ============================================================
+
+variabel_pilih <- c(
+  "G3", "studytime", "failures",
+  "absences", "Medu", "Fedu"
+)
+
+# Memastikan semua variabel yang dibutuhkan tersedia
+if (!all(variabel_pilih %in% names(data_raw))) {
+  stop("Ada variabel yang tidak ditemukan. Periksa nama kolom data.")
+}
+
+data_pilih <- data_raw[, variabel_pilih, drop = FALSE]
+
+# Konversi ke numerik
+data_pilih[] <- lapply(data_pilih, function(x) {
+  as.numeric(as.character(x))
+})
+
+# Hitung data yang hilang setelah konversi
+cat("\nMISSING VALUE PADA VARIABEL PENELITIAN\n")
+print(colSums(is.na(data_pilih)))
+
+# Hapus baris dengan missing value
+data_bersih <- data_pilih[complete.cases(data_pilih), ]
+
+# Memeriksa rentang nilai yang valid
+baris_valid <- with(
+  data_bersih,
+  G3 >= 0 & G3 <= 20 &
+    studytime %in% 1:4 &
+    failures >= 0 & failures <= 4 &
+    absences >= 0 &
+    Medu %in% 0:4 &
+    Fedu %in% 0:4
+)
+
+data_bersih <- data_bersih[baris_valid, , drop = FALSE]
+
+if (nrow(data_bersih) < 10) {
+  stop("Data valid terlalu sedikit. Periksa format dan isi CSV.")
+}
+
+cat("\nJUMLAH BARIS DATA AWAL:", nrow(data_raw), "\n")
+cat("JUMLAH BARIS DATA BERSIH:", nrow(data_bersih), "\n")
+cat("JUMLAH BARIS YANG TIDAK DIGUNAKAN:",
+    nrow(data_raw) - nrow(data_bersih), "\n")
+
+cat("\nDUPLIKASI PADA VARIABEL TERPILIH:",
+    sum(duplicated(data_bersih)), "\n")
+
+print(summary(data_bersih))
+
+write.csv(
+  data_bersih,
+  "output/student_por_bersih.csv",
+  row.names = FALSE
+)
+
+```
+
+```{r}
+# ============================================================
+# EXPLORATORY DATA ANALYSIS (EDA)
+# ============================================================
+
+statistik_deskriptif <- data.frame(
+  Variabel = names(data_bersih),
+  Jumlah = sapply(data_bersih, length),
+  Mean = sapply(data_bersih, mean),
+  Median = sapply(data_bersih, median),
+  Standar_Deviasi = sapply(data_bersih, sd),
+  Minimum = sapply(data_bersih, min),
+  Maksimum = sapply(data_bersih, max)
+)
+
+cat("\nSTATISTIK DESKRIPTIF\n")
+print(statistik_deskriptif, row.names = FALSE)
+
+# Histogram nilai akhir
+hist(
+  data_bersih$G3,
+  main = "Distribusi Nilai Akhir Bahasa Portugis",
+  xlab = "Nilai Akhir (G3)",
+  ylab = "Frekuensi",
+  col = "#F4B6C2",
+  border = "white",
+  breaks = seq(-0.5, 20.5, by = 1)
+)
+
+# Boxplot nilai akhir
+boxplot(
+  data_bersih$G3,
+  main = "Sebaran Nilai Akhir Siswa",
+  ylab = "Nilai Akhir (G3)",
+  col = "#C9B6E4",
+  border = "#8E78B7"
+)
+
+# Nilai akhir berdasarkan waktu belajar
+boxplot(
+  G3 ~ factor(studytime),
+  data = data_bersih,
+  main = "Nilai Akhir Berdasarkan Waktu Belajar",
+  xlab = "Waktu Belajar per Minggu",
+  ylab = "Nilai Akhir (G3)",
+  names = c("<2 jam", "2-5 jam", "5-10 jam", ">10 jam"),
+  col = c("#F4B6C2", "#F8D7A3", "#B9DCC4", "#B8D4F0")
+)
+
+# Nilai akhir berdasarkan jumlah kegagalan kelas sebelumnya
+boxplot(
+  G3 ~ factor(failures),
+  data = data_bersih,
+  main = "Nilai Akhir Berdasarkan Kegagalan Kelas",
+  xlab = "Jumlah Kegagalan Sebelumnya",
+  ylab = "Nilai Akhir (G3)",
+  col = "#D6C6F0"
+)
+
+# Ketidakhadiran dan nilai akhir
+plot(
+  data_bersih$absences,
+  data_bersih$G3,
+  main = "Ketidakhadiran dan Nilai Akhir",
+  xlab = "Jumlah Ketidakhadiran",
+  ylab = "Nilai Akhir (G3)",
+  pch = 19,
+  col = "#91B8E8"
+)
+
+# Matriks korelasi untuk eksplorasi awal
+cat("\nMATRIKS KORELASI\n")
+print(round(cor(data_bersih), 3))
+
+```
+
+```{r}
+# ============================================================
+# REGRESI LINEAR BERGANDA (MODEL AWAL)
+# ============================================================
+
+model_mlr <- lm(
+  G3 ~ studytime + failures + absences + Medu + Fedu,
+  data = data_bersih
+)
+
+cat("\nRINGKASAN MODEL MLR AWAL\n")
+print(summary(model_mlr))
+
+```
+
+```{r}
+# ============================================================
+# SELEKSI VARIABEL DENGAN AIC
+# ============================================================
+
+model_aic <- step(
+  model_mlr,
+  direction = "both",
+  trace = 0
+)
+
+cat("\nMODEL TERPILIH BERDASARKAN AIC\n")
+print(formula(model_aic))
+
+cat("\nRINGKASAN MODEL AIC\n")
+print(summary(model_aic))
+
+cat("\nPERBANDINGAN AIC MODEL\n")
+print(AIC(model_mlr, model_aic))
+
+```
+
+```{r}
+# ============================================================
+# UJI ASUMSI MODEL TERPILIH
+# ============================================================
+
+if (!requireNamespace("car", quietly = TRUE)) {
+}
+
+if (!requireNamespace("lmtest", quietly = TRUE)) {
+}
+
+if (!requireNamespace("sandwich", quietly = TRUE)) {
+}
+
+# Normalitas residual
+
+cat("\nUJI NORMALITAS RESIDUAL\n")
+if (length(residuals(model_aic)) <= 5000) {
+  print(shapiro.test(residuals(model_aic)))
+} else {
+  cat("Jumlah residual melebihi batas Shapiro-Wilk.\n")
+}
+
+# Multikolinearitas
+cat("\nUJI MULTIKOLINEARITAS (VIF)\n")
+print(car::vif(model_aic))
+
+# Heteroskedastisitas
+cat("\nUJI BREUSCH-PAGAN\n")
+print(lmtest::bptest(model_aic))
+
+```
+
+```{r}
+
+# ============================================================
+# ROBUST STANDARD ERRORS
+# ============================================================
+
+cat("\nKOEFISIEN DENGAN ROBUST STANDARD ERRORS HC3\n")
+hasil_robust <- lmtest::coeftest(
+  model_aic,
+  vcov. = sandwich::vcovHC(model_aic, type = "HC3")
+)
+print(hasil_robust)
+
+```
+
+```{r}
+# ============================================================
+# GRAFIK DIAGNOSTIK MODEL TERPILIH
+# ============================================================
+
+par(
+  mfrow = c(2, 2),
+  bg = "white",
+  mar = c(4, 4, 3, 1)
+)
+
+plot(model_aic, which = 1, col = "#E78FB3", pch = 19)
+plot(model_aic, which = 2, col = "#91B8E8", pch = 19)
+plot(model_aic, which = 3, col = "#A8CFA8", pch = 19)
+plot(model_aic, which = 5, col = "#C3A6E8", pch = 19)
+
+par(mfrow = c(1, 1))
+
+```
+
