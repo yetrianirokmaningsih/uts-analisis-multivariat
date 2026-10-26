@@ -277,3 +277,44 @@ par(mfrow = c(1, 1))
 
 ```
 
+```{r}
+
+
+# STATISTIK DESKRIPTIF SELURUH VARIABEL PENELITIAN
+
+library(dplyr)
+library(knitr)
+library(kableExtra)
+
+statistik_deskriptif <- data_bersih %>%
+  select(G3, studytime, failures, absences, Medu, Fedu) %>%
+  summarise(
+    across(
+      everything(),
+      list(
+        N = ~sum(!is.na(.)),
+        Mean = ~mean(., na.rm = TRUE),
+        Median = ~median(., na.rm = TRUE),
+        SD = ~sd(., na.rm = TRUE),
+        Minimum = ~min(., na.rm = TRUE),
+        Maksimum = ~max(., na.rm = TRUE)
+      )
+    )
+  ) %>%
+  tidyr::pivot_longer(
+    cols = everything(),
+    names_to = c("Variabel", ".value"),
+    names_pattern = "^(.*)_(N|Mean|Median|SD|Minimum|Maksimum)$"
+  ) %>%
+  mutate(
+    across(c(Mean, Median, SD), ~round(., 2))
+  )
+
+knitr::kable(
+  statistik_deskriptif,
+  caption = "Statistik Deskriptif Seluruh Variabel Penelitian",
+  align = "c"
+)
+
+
+```
